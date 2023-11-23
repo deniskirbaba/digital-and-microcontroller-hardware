@@ -48,7 +48,11 @@
 UART_HandleTypeDef huart2;
 
 /* USER CODE BEGIN PV */
-
+int n_r;
+int res_n;
+uint8_t tx_buffer[5];
+uint8_t rx_buffer[4];
+uint8_t firstByteWait = 1;
 /* USER CODE END PV */
 
 /* Private function prototypes -----------------------------------------------*/
@@ -61,10 +65,17 @@ static void MX_USART2_UART_Init(void);
 
 /* Private user code ---------------------------------------------------------*/
 /* USER CODE BEGIN 0 */
-char* tx_buffer;
-uint8_t* rx_buffer;
-int n;
-double res_n;
+
+void set_line () {
+    HAL_GPIO_WritePin(GPIOA, a_Pin, GPIO_PIN_SET); //A
+    HAL_GPIO_WritePin(GPIOA, b_Pin, GPIO_PIN_SET); //B
+    HAL_GPIO_WritePin(GPIOA, c_Pin, GPIO_PIN_SET); //C
+    HAL_GPIO_WritePin(GPIOC, d_Pin, GPIO_PIN_SET); //D
+    HAL_GPIO_WritePin(GPIOC, e_Pin, GPIO_PIN_SET); //E
+    HAL_GPIO_WritePin(GPIOD, f_Pin, GPIO_PIN_SET);	//F
+    HAL_GPIO_WritePin(GPIOC, g_Pin, GPIO_PIN_RESET);  //G
+    HAL_GPIO_WritePin(GPIOA, dp_Pin, GPIO_PIN_SET);  //dp
+}
 
 void set_number (int number)
 {
@@ -213,6 +224,36 @@ void set_number (int number)
     }
 }
 
+void display_undef () {
+    HAL_GPIO_WritePin(GPIOB, DIG1_Pin, GPIO_PIN_SET);
+    HAL_GPIO_WritePin(GPIOB, DIG2_Pin, GPIO_PIN_SET);
+    HAL_GPIO_WritePin(GPIOA, DIG3_Pin, GPIO_PIN_SET);
+    HAL_GPIO_WritePin(GPIOC, DIG4_Pin, GPIO_PIN_RESET);
+    set_line();
+    HAL_Delay(1);
+
+    HAL_GPIO_WritePin(GPIOB, DIG1_Pin, GPIO_PIN_SET);
+    HAL_GPIO_WritePin(GPIOB, DIG2_Pin, GPIO_PIN_SET);
+    HAL_GPIO_WritePin(GPIOA, DIG3_Pin, GPIO_PIN_RESET);
+    HAL_GPIO_WritePin(GPIOC, DIG4_Pin, GPIO_PIN_SET);
+    set_line();
+    HAL_Delay(1);
+
+    HAL_GPIO_WritePin(GPIOB, DIG1_Pin, GPIO_PIN_SET);
+    HAL_GPIO_WritePin(GPIOB, DIG2_Pin, GPIO_PIN_RESET);
+    HAL_GPIO_WritePin(GPIOA, DIG3_Pin, GPIO_PIN_SET);
+    HAL_GPIO_WritePin(GPIOC, DIG4_Pin, GPIO_PIN_SET);
+    set_line();
+    HAL_Delay(1);
+
+    HAL_GPIO_WritePin(GPIOB, DIG1_Pin, GPIO_PIN_RESET);
+    HAL_GPIO_WritePin(GPIOB, DIG2_Pin, GPIO_PIN_SET);
+    HAL_GPIO_WritePin(GPIOA, DIG3_Pin, GPIO_PIN_SET);
+    HAL_GPIO_WritePin(GPIOC, DIG4_Pin, GPIO_PIN_SET);
+    set_line();
+    HAL_Delay(1);
+}
+
 void display_number (int number){
 
     HAL_GPIO_WritePin(GPIOB, DIG1_Pin, GPIO_PIN_SET);
@@ -245,16 +286,6 @@ void display_number (int number){
 
 }
 
-int check_range(int number)
-{
-    if (number < 0) {
-        return 0;
-    }
-    else if (number > 9999) {
-        return 9999;
-    }
-    return number;
-}
 /* USER CODE END 0 */
 
 /**
@@ -264,9 +295,7 @@ int check_range(int number)
 int main(void)
 {
   /* USER CODE BEGIN 1 */
-	n = 1234;
-	rx_buffer = (uint8_t*) malloc(4 * sizeof(uint8_t));
-	tx_buffer = (char*) malloc(8 * sizeof(char));
+
   /* USER CODE END 1 */
 
   /* MCU Configuration--------------------------------------------------------*/
@@ -294,15 +323,18 @@ int main(void)
 
   /* Infinite loop */
   /* USER CODE BEGIN WHILE */
-  HAL_UART_Receive_IT(&huart2, rx_buffer, 4);
+  rx_buffer[0] = 0; rx_buffer[1] = 0; rx_buffer[2] = 0; rx_buffer[3] = 0;
+
+  display_number(1234);
+
+  HAL_UART_Receive_IT(&huart2, rx_buffer, 1);
 
   while (1)
   {
     /* USER CODE END WHILE */
 
     /* USER CODE BEGIN 3 */
-	  display_number(n);
-      HAL_Delay(1);
+
   }
   /* USER CODE END 3 */
 }
@@ -441,11 +473,29 @@ static void MX_GPIO_Init(void)
 
 /* USER CODE BEGIN 4 */
 void HAL_UART_RxCpltCallback(UART_HandleTypeDef *huart) {
-	n = ((int)rx_buffer[1] - 48) * 10 + ((int)rx_buffer[2] - 48);  // since the numbers (digits) start from 48 in ASCII code
-	res_n = log(n); // perform ln(x)
-	sprintf(tx_buffer, "N%.2fE\r\n", res_n);
-	HAL_UART_Transmit_IT(&huart2, tx_buffer, 8);
-    HAL_UART_Receive_IT(huart, rx_buffer, 4);
+	if (huart == &huart2) {
+		if (firstByteWait != 0) {
+			firstByteWait = 0;
+			HAL_UART_Receive_IT(&huart2, rx_buffer, 3);
+		}
+		else {
+			n_r = ((int)rx_buffer[1] - 48) * 10 + ((int)rx_buffer[2] - 48);  // since the numbers (digits) start from 48 in ASCII code
+			if (n_r == 0) {
+				display_undef();
+				sprintf(tx_buffer, "N--E");
+			}
+			else {
+				res_n = (int)round(log(n_r));
+				display_number(res_n);
+				sprintf(tx_buffer, "N0%u", res_n);
+			}
+			HAL_UART_Transmit_IT(&huart2, tx_buffer, 4);
+
+			rx_buffer[0] = 0; rx_buffer[1] = 0; rx_buffer[2] = 0; rx_buffer[3] = 0;
+			firstByteWait = 1;
+			HAL_UART_Receive_IT(&huart2, rx_buffer, 1);
+		}
+	}
 }
 /* USER CODE END 4 */
 
