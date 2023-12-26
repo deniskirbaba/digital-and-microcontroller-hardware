@@ -40,44 +40,33 @@
 /* USER CODE END PM */
 
 /* Private variables ---------------------------------------------------------*/
-TIM_HandleTypeDef htim1;
+TIM_HandleTypeDef htim2;
 
 UART_HandleTypeDef huart2;
 DMA_HandleTypeDef hdma_usart2_rx;
 DMA_HandleTypeDef hdma_usart2_tx;
 
 /* USER CODE BEGIN PV */
-float t;  // time
+float t;
 
-float bias;
-float amp;
-float freq;
-float phase;
-
-typedef struct {
+struct __attribute__((__packed__)) rx_struct {
 	uint8_t header;
 	float bias;
 	float amp;
 	float freq;
 	float phase;
 	uint8_t terminator;
-} rx_struct;
-rx_struct rx_buffer;
+};
+struct rx_struct rx_buffer = {'N', 0, 0, 0, 0, 'E'};
 
-typedef struct {
+struct __attribute__((__packed__)) tx_struct {
 	uint8_t header;
 	float t;
 	float val;
 	uint8_t terminator;
-} tx_struct;
-tx_struct tx_buffer = {
-	.header = 'N',
-	.t = 0,
-	.val = 0,
-	.terminator = 'E'
 };
+struct tx_struct tx_buffer = {'N', 0, 0, 'E'};
 
-uint8_t have_params = 0;  // flag of having params of calculation
 /* USER CODE END PV */
 
 /* Private function prototypes -----------------------------------------------*/
@@ -85,7 +74,7 @@ void SystemClock_Config(void);
 static void MX_GPIO_Init(void);
 static void MX_DMA_Init(void);
 static void MX_USART2_UART_Init(void);
-static void MX_TIM1_Init(void);
+static void MX_TIM2_Init(void);
 /* USER CODE BEGIN PFP */
 
 /* USER CODE END PFP */
@@ -125,28 +114,23 @@ int main(void)
   MX_GPIO_Init();
   MX_DMA_Init();
   MX_USART2_UART_Init();
-  MX_TIM1_Init();
+  MX_TIM2_Init();
   /* USER CODE BEGIN 2 */
-  t = 0;
+  t = 0.0;
 
-  HAL_TIM_Base_Start_IT(&htim1);
+  HAL_TIM_Base_Start_IT(&htim2);
+
   HAL_UART_Receive_DMA(&huart2, (uint8_t*)&rx_buffer, sizeof(rx_buffer));
 
-  while (!have_params);
   /* USER CODE END 2 */
 
   /* Infinite loop */
   /* USER CODE BEGIN WHILE */
-  while (1)
-  {
-    /* USER CODE END WHILE */
-	bias = rx_buffer.bias;
-	amp = rx_buffer.amp;
-	freq = rx_buffer.freq;
-	phase = rx_buffer.phase;
 
-	tx_buffer.t = t;
-	tx_buffer.t = bias + amp*sinf(freq*t + phase);
+   while (1)
+   {
+
+    /* USER CODE END WHILE */
 
     /* USER CODE BEGIN 3 */
   }
@@ -193,48 +177,47 @@ void SystemClock_Config(void)
 }
 
 /**
-  * @brief TIM1 Initialization Function
+  * @brief TIM2 Initialization Function
   * @param None
   * @retval None
   */
-static void MX_TIM1_Init(void)
+static void MX_TIM2_Init(void)
 {
 
-  /* USER CODE BEGIN TIM1_Init 0 */
+  /* USER CODE BEGIN TIM2_Init 0 */
 
-  /* USER CODE END TIM1_Init 0 */
+  /* USER CODE END TIM2_Init 0 */
 
   TIM_ClockConfigTypeDef sClockSourceConfig = {0};
   TIM_MasterConfigTypeDef sMasterConfig = {0};
 
-  /* USER CODE BEGIN TIM1_Init 1 */
+  /* USER CODE BEGIN TIM2_Init 1 */
 
-  /* USER CODE END TIM1_Init 1 */
-  htim1.Instance = TIM1;
-  htim1.Init.Prescaler = 1599;
-  htim1.Init.CounterMode = TIM_COUNTERMODE_UP;
-  htim1.Init.Period = 99;
-  htim1.Init.ClockDivision = TIM_CLOCKDIVISION_DIV1;
-  htim1.Init.RepetitionCounter = 0;
-  htim1.Init.AutoReloadPreload = TIM_AUTORELOAD_PRELOAD_DISABLE;
-  if (HAL_TIM_Base_Init(&htim1) != HAL_OK)
+  /* USER CODE END TIM2_Init 1 */
+  htim2.Instance = TIM2;
+  htim2.Init.Prescaler = 1599;
+  htim2.Init.CounterMode = TIM_COUNTERMODE_UP;
+  htim2.Init.Period = 999;
+  htim2.Init.ClockDivision = TIM_CLOCKDIVISION_DIV1;
+  htim2.Init.AutoReloadPreload = TIM_AUTORELOAD_PRELOAD_DISABLE;
+  if (HAL_TIM_Base_Init(&htim2) != HAL_OK)
   {
     Error_Handler();
   }
   sClockSourceConfig.ClockSource = TIM_CLOCKSOURCE_INTERNAL;
-  if (HAL_TIM_ConfigClockSource(&htim1, &sClockSourceConfig) != HAL_OK)
+  if (HAL_TIM_ConfigClockSource(&htim2, &sClockSourceConfig) != HAL_OK)
   {
     Error_Handler();
   }
   sMasterConfig.MasterOutputTrigger = TIM_TRGO_RESET;
   sMasterConfig.MasterSlaveMode = TIM_MASTERSLAVEMODE_DISABLE;
-  if (HAL_TIMEx_MasterConfigSynchronization(&htim1, &sMasterConfig) != HAL_OK)
+  if (HAL_TIMEx_MasterConfigSynchronization(&htim2, &sMasterConfig) != HAL_OK)
   {
     Error_Handler();
   }
-  /* USER CODE BEGIN TIM1_Init 2 */
+  /* USER CODE BEGIN TIM2_Init 2 */
 
-  /* USER CODE END TIM1_Init 2 */
+  /* USER CODE END TIM2_Init 2 */
 
 }
 
@@ -304,18 +287,20 @@ static void MX_GPIO_Init(void)
 }
 
 /* USER CODE BEGIN 4 */
-void HAL_UART_TxCpltCallback(UART_HandleTypeDef* huart)
+void HAL_UART_RxCpltCallback(UART_HandleTypeDef *huart)
 {
-	have_params = 1;
+	tx_buffer.t = t;
+	tx_buffer.val = rx_buffer.bias + rx_buffer.amp*sinf(rx_buffer.freq*t + rx_buffer.phase);
+	HAL_UART_Receive_DMA(&huart2, (uint8_t*)&rx_buffer, sizeof(rx_buffer));
 }
 
 void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef* htim)
 {
-	if (have_params) {
-		HAL_UART_Transmit_DMA(&huart2, (uint8_t*)&tx_buffer, sizeof(tx_buffer));
-	}
 	t += 0.01;
+	HAL_UART_Transmit_DMA(&huart2, (uint8_t*)&tx_buffer, sizeof(tx_buffer));
 }
+
+
 /* USER CODE END 4 */
 
 /**
